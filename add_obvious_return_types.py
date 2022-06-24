@@ -1,4 +1,5 @@
 import argparse
+import re
 import sys
 import ast
 
@@ -19,14 +20,33 @@ def process_func_def(node: ast.FunctionDef):
             return
         if isinstance(_node, ast.Return):
             returns.append(process_return(_node.value))
-    breakpoint()
-    pass
+    if all(i is None for i in returns):
+        return node
+    return None
+
+def rewrite_return_type(src, name, lineno, col_offset):
+    lines = src.splitlines(keepends=True)
+    before = ''.join(lines[:lineno-1])
+    after = ''.join(lines[lineno-1:])
+    pattern = fr'^(def\s+{name}\(.*\)\s*)(:)(.*)'
+    rewrite = re.sub(pattern, '\\1 -> None:\\3', after[col_offset:])
+    src = before + after[:col_offset] + rewrite
+    return src
+
+
 
 def rewrite(src):
     tree = ast.parse(src)
+    to_rewrite = []
     for _node in ast.walk(tree):
         if isinstance(_node, ast.FunctionDef):
-            process_func_def(_node)
+            _to_rewrite = process_func_def(_node)
+            if _to_rewrite is not None:
+                to_rewrite.append(_to_rewrite)
+    for node in to_rewrite:
+        src = rewrite_return_type(src, node.name, node.lineno, node.col_offset)
+    if to_rewrite:
+        return True, src
     return False, src
 
 

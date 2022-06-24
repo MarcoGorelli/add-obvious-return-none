@@ -11,7 +11,7 @@ def test_no_return_stmt():
     )
     ret, result  = rewrite(src)
     assert result == expected
-    assert not ret
+    assert ret
 
 def test_simple():
     src = (
