@@ -2,6 +2,36 @@ import argparse
 import re
 import sys
 import ast
+from tokenize_rt import tokens_to_src, src_to_tokens
+
+
+def _find_start_token(tokens, lineno, col_offset):
+    iter_tokens = iter(tokens)
+    for token in iter_tokens:
+        if token.line == lineno and token.utf8_byte_offset == col_offset:
+            break
+    else:
+        pass
+    return list(iter_tokens)
+
+
+def _find_closing_paren(tokens):
+    iter_tokens = iter(tokens)
+    for token in iter_tokens:
+        if token.name == 'OP' and token.src == '(':
+            break
+    else:
+        pass
+    stack = 1
+    for token in iter_tokens:
+        if token.name == 'OP' and token.src == '(':
+            stack += 1
+        elif token.name == 'OP' and token.src == ')':
+            stack -= 1
+        if stack == 0:
+            return token.line, token.utf8_byte_offset
+    else:
+        pass
 
 def process_return(node: ast.Return):
     if node is None:
@@ -55,13 +85,17 @@ def process_func_def(node: ast.FunctionDef):
         return node
     return None
 
-def rewrite_return_type(src, name, lineno, col_offset):
+def rewrite_return_type(src, name, lineno, col_offset, tokens):
     lines = src.splitlines(keepends=True)
     before = ''.join(lines[:lineno-1])
     after = ''.join(lines[lineno-1:])
-    pattern = fr'^(def\s+{name}\(.*\)\s*)(:)'
-    rewrite = re.sub(pattern, '\\1 -> None:', after[col_offset:])
-    src = before + after[:col_offset] + rewrite
+    tokens = _find_start_token(tokens, lineno, col_offset)
+    line_, col_offset_ = _find_closing_paren(tokens)
+    after_before = ''.join(after.splitlines(keepends=True)[:line_])[:col_offset_]
+    after_after = ''.join(after.splitlines(keepends=True)[line_-1:])[col_offset_:]
+    pattern = fr'^(\)\s*)(:)'
+    rewrite = re.sub(pattern, '\\1 -> None:', after_after)
+    src = before + after[:col_offset] + after_before + rewrite
     return src
 
 
@@ -74,11 +108,12 @@ def rewrite(src):
             _to_rewrite = process_func_def(_node)
             if _to_rewrite is not None:
                 to_rewrite.append(_to_rewrite)
+    if not to_rewrite:
+        return False, src
+    tokens = src_to_tokens(src)
     for node in to_rewrite:
-        src = rewrite_return_type(src, node.name, node.lineno, node.col_offset)
-    if to_rewrite:
-        return True, src
-    return False, src
+        src = rewrite_return_type(src, node.name, node.lineno, node.col_offset, tokens)
+    return True, src
 
 
 def main(src, file_):

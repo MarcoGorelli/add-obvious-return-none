@@ -150,3 +150,18 @@ def test_yields_from():
     ret, result  = rewrite(src)
     assert result == expected
     assert not ret
+
+def test_tuple_arg():
+    src = (
+        'def foo(a = (1, 2)):\n'
+        '    """docs"""\n'
+        '    return\n'
+    )
+    expected = (
+        'def foo(a = (1, 2)) -> None:\n'
+        '    """docs"""\n'
+        '    return\n'
+    )
+    ret, result  = rewrite(src)
+    assert result == expected
+    assert ret
