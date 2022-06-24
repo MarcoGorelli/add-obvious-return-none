@@ -9,6 +9,23 @@ def process_return(node: ast.Return):
     elif isinstance(node, ast.Constant) and node.value is None:
         return 'None'
 
+def might_be_abstract_method(node, decorator_list):
+    if isinstance(node, ast.Raise):
+        return True
+    for _node in decorator_list:
+        if isinstance(_node, ast.Name) and _node.id == 'abstractmethod':
+            return True
+        if isinstance(_node, ast.Attribute) and _node.attr == 'abstractmethod':
+            return True
+    return False
+
+def might_be_docstring(node):
+    return (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+    )
+
 
 def process_func_def(node: ast.FunctionDef):
     if node.returns is not None:
@@ -16,21 +33,21 @@ def process_func_def(node: ast.FunctionDef):
         return None
     returns = []
     walk = list(ast.walk(node))[1:]
-    if len(node.body) == 1 and isinstance(node.body[0], ast.Raise):
+    if len(node.body) == 1 and might_be_abstract_method(node.body[0], node.decorator_list):
         # might be an abstract method that needs overriding
         return
     if (
             len(node.body) == 2
-            and isinstance(node.body[1], ast.Raise)
-            and isinstance(node.body[0], ast.Expr)
-            and isinstance(node.body[0].value, ast.Constant)
-            and isinstance(node.body[0].value.value, str)
+            and might_be_docstring(node.body[0])
+            and might_be_abstract_method(node.body[1], node.decorator_list)
     ):
         # might be abstract method with docstring
         return
 
     for _node in walk:
-        if isinstance(_node, ast.FunctionDef):
+        if isinstance(_node, (ast.FunctionDef, ast.Yield, ast.YieldFrom)):
+            # don't rewrite functions with nested functions inside them,
+            # nor functions with yield or yield from
             return
         if isinstance(_node, ast.Return):
             returns.append(process_return(_node.value))
