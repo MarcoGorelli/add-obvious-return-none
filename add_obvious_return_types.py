@@ -11,6 +11,7 @@ def _find_start_token(tokens, lineno, col_offset):
         if token.line == lineno and token.utf8_byte_offset == col_offset:
             break
     else:
+        breakpoint()
         pass
     return list(iter_tokens)
 
@@ -21,6 +22,7 @@ def _find_closing_paren(tokens):
         if token.name == 'OP' and token.src == '(':
             break
     else:
+        breakpoint()
         pass
     stack = 1
     for token in iter_tokens:
@@ -31,6 +33,7 @@ def _find_closing_paren(tokens):
         if stack == 0:
             return token.line, token.utf8_byte_offset
     else:
+        breakpoint()
         pass
 
 def process_return(node: ast.Return):
@@ -87,15 +90,13 @@ def process_func_def(node: ast.FunctionDef):
 
 def rewrite_return_type(src, name, lineno, col_offset, tokens):
     lines = src.splitlines(keepends=True)
-    before = ''.join(lines[:lineno-1])
-    after = ''.join(lines[lineno-1:])
     tokens = _find_start_token(tokens, lineno, col_offset)
     line_, col_offset_ = _find_closing_paren(tokens)
-    after_before = ''.join(after.splitlines(keepends=True)[:line_])[:col_offset_]
-    after_after = ''.join(after.splitlines(keepends=True)[line_-1:])[col_offset_:]
+    before = ''.join(src.splitlines(keepends=True)[:line_-1])
+    after = ''.join(src.splitlines(keepends=True)[line_-1:])
     pattern = fr'^(\)\s*)(:)'
-    rewrite = re.sub(pattern, '\\1 -> None:', after_after)
-    src = before + after[:col_offset] + after_before + rewrite
+    rewrite = re.sub(pattern, '\\1 -> None:', after[col_offset_:])
+    src = before + after[:col_offset_] + rewrite
     return src
 
 
